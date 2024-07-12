@@ -7,19 +7,19 @@ namespace BackEndApp.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class ApplicationController : ControllerBase
+    public class SaveController : ControllerBase
     {
         private readonly Settings.Settings _settings;
         private IWebHostEnvironment _environment;
 
-        public ApplicationController(IOptions<Settings.Settings> settings, IWebHostEnvironment env)
+        public SaveController(IOptions<Settings.Settings> settings, IWebHostEnvironment env)
         {
             _settings = settings.Value;
             _environment = env;
         }
 
         [HttpPost]
-        public async Task<IActionResult> UpdateAsgardStats(Stats stats)
+        public IActionResult UpdateAsgardStats(Stats stats)
         {
             try
             {
