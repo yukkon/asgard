@@ -1,0 +1,316 @@
+<html>
+
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <link rel="stylesheet" href="panel.css">
+    <link rel="stylesheet" href="bootstrap.min.css">
+    <script src="bootstrap.bundle.min.js"></script>
+    <script type="module">
+        import d from "./drawer.js";
+
+        Object.defineProperty(Date.prototype, 'week', {
+            get() {
+                let date = new Date(this.getTime());
+                date.setHours(0, 0, 0, 0);
+
+                let day1 = new Date(date.getFullYear(), 0, 1);
+                let days = Math.floor((date - day1) / (24 * 60 * 60 * 1000));
+
+                let week = Math.ceil((date.getDay() + 1 + days) / 7);
+
+                return week;
+            }
+        })
+
+        let raid;
+        let drawer;
+
+        /*let myWorker;
+        if (window.Worker) {
+          myWorker = new Worker("worker.js");
+
+          myWorker.onmessage = function(e) {
+            console.log('Message received from worker', e);
+          }
+        } else {
+          throw new Error('Your browser doesn\'t support web workers.')
+        }*/
+
+        function raidInfo() {
+            import("./main.js").then(m => {
+                let vars = {
+                    index_url: "https:\/\/heroesweb-a.akamaihd.net\/wb\/index.v0888.json.gz",
+                    static_url: "https:\/\/heroesweb-a.akamaihd.net\/wb\/"
+                };
+
+                let l = new m.default(vars)
+                l.load([
+                    { key: 'assets/js/gui/dialog_basic.rsx' },
+                    { key: "assets/hero_icons_only/hero_icons_only.xml" },
+                    { key: "assets/js/titan_icons/titan_icons.rsx" },
+                    { key: 'assets/js/pet_icons/pet_icons.rsx' },
+                    { key: "assets/js/gui/titan_artifact_icons.rsx" },
+                    { key: "assets/js/banner/banner_icons.rsx" },
+                    { key: "assets/inventory_icons/banner_stone_icons.xml" },
+                    { key: "assets/js/team_flags/team_flag_icons.rsx" },
+                    { key: "assets/inventory_icons/scroll_icons.xml" },
+                    { key: "assets/inventory_icons/gear_icons_05.xml" },
+                    { key: "assets/inventory_icons/gear_icons_2_05.xml" },
+                    { key: "assets/js/gui/dialog_season_adventure_tiles.rsx" },
+                    { key: "assets/inventory_icons/ascension_gear_icons.xml" },
+                    { key: "assets/js/gui/pet_gear.rsx" },
+                    { key: "assets/inventory_icons/consumable.xml" },
+                    { key: "assets/quest_icons/quest_icons.xml" }
+                ])
+                    .then(p => {
+                        window.XXX = p;
+                        drawer = new d(p);
+                        let w = new Date().week
+
+                        return Promise.all(
+                            Array.from({ length: 5 }).map(
+                                (_, index) => fetch(`${w - 4 + index}.json`)
+                                    .then(r => {
+                                        if (r.ok) {
+                                            return r.json()
+                                        } else {
+                                            return []
+                                        }
+                                    })
+                                    .then(d => ({ week: (w - 4 + index), data: d }))
+                                    .catch()
+                            )
+                        )
+                    })
+                    .then(d => {
+                        raid = d.filter(i => !!i);
+                        clanRaidGetInfo();
+                    })
+            })
+        }
+
+        //босс - дамаг
+        let s1 = (a, b) => s(a, b, [{ 'field': 'boss', 'direction': 'A' }, { 'field': 'damage', 'direction': 'D' }]);
+
+        // имя -> босс -> дамаг
+        let s2 = (a, b) => s(a, b, [{ 'field': 'name' }, { 'field': 'boss' }, { 'field': 'damage', 'direction': 'D' }]);
+
+        //arr.sort((a,b) => return s(a,b,['a', 'c']))
+        function s(a, b, arr) {
+            let { field, direction } = arr.shift();
+
+            if (a[field] > b[field]) {
+                return direction == 'D' ? -1 : 1;
+            } else if (a[field] == b[field]) {
+                if (arr.length > 0) {
+                    return s(a, b, arr);
+                } else {
+                    return 0;
+                }
+            } else {
+                return direction == 'D' ? 1 : -1;
+            }
+        }
+
+        function clanRaidGetInfo() {
+            let tabs = document.querySelector("#myTab");
+            Array.from(tabs.children).forEach(el => el.remove());
+
+            let tab_contents = document.querySelector("#myTabContent");
+            Array.from(tab_contents.children).forEach(el => el.remove());
+
+            let names = [];
+            Object.values(raid).forEach(({ week, data }) => {
+                let tab = document.createElement('li');
+                tab.className = "nav-item";
+                tab.role = "presentation";
+
+                let tab_button = document.createElement('button');
+                tab_button.className = "nav-link";
+                tab_button.id = `tab-${week}`;
+                tab_button.dataset.bsToggle = "tab"
+                tab_button.dataset.bsTarget = `#content${week}`;
+                tab_button.type = "button";
+                tab_button.role = "tab";
+                tab_button.ariaControls = "clan";
+                tab_button.ariaSelected = "true";
+                tab_button.innerText = `Week ${week}`;
+
+                tab.appendChild(tab_button);
+                tabs.appendChild(tab);
+
+                let c = document.createElement('div');
+                c.className = "tab-pane fade";
+                c.role = "tabpanel";
+                c.id = `content${week}`;
+                c.role = "tabpanel";
+                c.ariaLabelledby = `tab-${week}`;
+
+                names = names.concat(data.map(e => e.name));
+
+                fillContent(c, data);
+
+                tab_contents.appendChild(c);
+            })
+
+            tabs.querySelector(":last-child > button").className += " active"
+            tab_contents.querySelector(".tab-pane:last-child").className += " active show";
+
+            let ddl = document.querySelector(".dropdown-menu");
+
+            let li = document.createElement('li');
+            let button = document.createElement('button');
+            button.className = "dropdown-item"
+            button.type = "button"
+            button.innerText = 'Все игроки';
+            button.dataset.value = '0';
+            li.appendChild(button);
+            ddl.appendChild(li);
+
+            names.filter(onlyUnique).forEach(n => {
+                let li = document.createElement('li');
+                let button = document.createElement('button');
+                button.className = "dropdown-item"
+                button.type = "button"
+                button.innerText = n;
+
+                li.appendChild(button);
+                ddl.appendChild(li);
+            });
+
+            document.querySelectorAll(".dropdown-menu li button").forEach(el =>
+                el.addEventListener("click", function (e) {
+                    document.querySelector(".btn:first-child").innerText = e.currentTarget.innerText;
+                    document.querySelector(".btn:first-child").dataset.value = e.currentTarget.innerText;
+                    if (e.currentTarget.innerText != 'Все игроки') {
+                        document.querySelector(".btn-group").classList.remove("d-block");
+                        document.querySelector(".btn-group").classList.add("d-none");
+                    } else {
+                        document.querySelector(".btn-group").classList.add("d-block");
+                        document.querySelector(".btn-group").classList.remove("d-none");
+                    }
+                    clanRaidGetInfo();
+                })
+            );
+
+            document.querySelectorAll("[name='btnradio']").forEach(el =>
+                el.addEventListener("click", function (e) {
+                    clanRaidGetInfo();
+                })
+            );
+
+        }
+
+        function filterContent() {
+            console.log('Name', name);
+            console.log('Sort', sorting);
+        }
+
+        var onlyUnique = (value, index, array) => { return array.indexOf(value) === index; };
+
+        function fillContent(con, data) {
+            let dataDOMElement = con
+
+            let name = document.querySelector(".btn:first-child").dataset.value;
+            let sorting = document.querySelector("input[name='btnradio']:checked").value;
+
+            let bosses = sorting === '1' ? data.sort(s1) : data.sort(s2);
+            bosses.filter(el => { return name == undefined || name == 'Все игроки' || el.name == name }).forEach(b => {
+                let r = document.createElement('div');
+                r.className = 'row';
+
+                let c = document.createElement('div');
+                c.className = "cell col-1 cc";
+                c.innerText = b.name;
+                r.appendChild(c);
+
+                //c = document.createElement('div');
+                //c.className = "cell col-3";
+                //c.innerText = b.date.toLocaleString('ru');
+                //r.appendChild(c);
+
+                c = document.createElement('div');
+                c.className = "cell col-1";
+                c.innerText = b.boss;
+                r.appendChild(c);
+
+                c = document.createElement('div');
+                c.className = "cell col-1";
+                c.innerText = b.damage.toLocaleString('it-CH');
+                r.appendChild(c);
+
+                c = document.createElement('div');
+                c.className = "cell col-3";
+
+                /*let ca = document.createElement('canvas');
+                ca.width = "627";
+                ca.height = "119"
+                ca.style = "border:1px solid #4B380C;height:75px;background-color: #23140A; border-radius: 10px;padding: 5px;"
+                c.appendChild(ca);
+                */
+                //myWorker.postMessage(b);
+                /*
+                //draw(ca, b); draw data in service worker
+                let dr = new Drawer(canvas, window.XX);
+                dr.draw(data);
+                */
+                let src = drawer.draw(null, b);
+                let ca = document.createElement('image');
+                ca.width = "630px";
+                ca.height = "146px"
+                ca.src = src;
+                ca.style = "border:1px solid #4B380C; background-color: #23140A; border-radius: 10px; padding: 5px;"
+                c.appendChild(ca);
+
+                r.appendChild(c);
+
+                dataDOMElement.appendChild(r);
+            })
+        }
+
+        document.addEventListener("DOMContentLoaded", raidInfo);
+    </script>
+</head>
+
+<body>
+    <div id="data" style="width:800px;margin:10px;font-size:12px;font-size: 18px"></div>
+    <div class="accordion" id="accordionExample">
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="headingOne">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne"
+                        aria-expanded="true" aria-controls="collapseOne">
+                    Настройки
+                </button>
+            </h2>
+            <div id="collapseOne" class="accordion-collapse collapse " aria-labelledby="headingOne"
+                 data-bs-parent="#accordionExample">
+                <div class="accordion-body">
+                    <div class="row">
+                        <div class="dropdown col-2">
+                            <button class="btn btn-secondary dropdown-toggle" type="button" id="dropdownMenu2"
+                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                Все игроки
+                            </button>
+                            <ul class="dropdown-menu" aria-labelledby="dropdownMenu2">
+                            </ul>
+                        </div>
+                        <div class="btn-group col-4" role="group" aria-label="Basic radio toggle button group">
+                            <input type="radio" class="btn-check" name="btnradio" id="btnradio1" checked value="1">
+                            <label class="btn btn-outline-primary" for="btnradio1">Boss - Damage</label>
+                            <input type="radio" class="btn-check" name="btnradio" id="btnradio2" value="2">
+                            <label class="btn btn-outline-primary" for="btnradio2">Name - Boss - Damage</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="__result">
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+        </ul>
+        <div class="tab-content" id="myTabContent">
+        </div>
+    </div>
+</body>
+
+</html>
